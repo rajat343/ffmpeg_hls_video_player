@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<title>Video Processor & HLS Player</title>
+		<style>
+			body {
+				font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+				max-width: 900px;
+				margin: 0 auto;
+				padding: 20px;
+				background-color: #f5f5f5;
+			}
+			.container {
+				background-color: white;
+				border-radius: 10px;
+				padding: 30px;
+				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+			}
+			.upload-container {
+				margin: 20px 0;
+				padding: 30px;
+				border: 2px dashed #4a90e2;
+				border-radius: 8px;
+				text-align: center;
+				background-color: #f8f9fa;
+				transition: all 0.3s ease;
+			}
+			.upload-container:hover {
+				border-color: #357abd;
+				background-color: #f0f4f8;
+			}
+			.player-container {
+				display: none;
+				margin-top: 30px;
+				background-color: #fff;
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+			}
+			.input-group {
+				margin: 15px 0;
+			}
+			.input-group input[type="file"] {
+				display: none;
+			}
+			.custom-file-upload {
+				display: inline-block;
+				padding: 12px 24px;
+				background: #4a90e2;
+				color: white;
+				border-radius: 5px;
+				cursor: pointer;
+				transition: background 0.3s ease;
+			}
+			.custom-file-upload:hover {
+				background: #357abd;
+			}
+			.url-input {
+				width: 80%;
+				padding: 12px;
+				margin: 10px 0;
+				border: 1px solid #ddd;
+				border-radius: 5px;
+				font-size: 14px;
+			}
+			.process-btn {
+				padding: 12px 30px;
+				background: #28a745;
+				color: white;
+				border: none;
+				border-radius: 5px;
+				cursor: pointer;
+				font-size: 16px;
+				transition: background 0.3s ease;
+			}
+			.process-btn:hover {
+				background: #218838;
+			}
+			.process-btn:disabled {
+				background: #6c757d;
+				cursor: not-allowed;
+			}
+			.quality-selector {
+				margin: 15px 0;
+			}
+			.quality-selector select {
+				padding: 8px 15px;
+				border-radius: 5px;
+				border: 1px solid #ddd;
+				font-size: 14px;
+				margin-left: 10px;
+			}
+			.progress {
+				display: none;
+				margin: 20px 0;
+				padding: 15px;
+				background: #e9ecef;
+				border-radius: 5px;
+				text-align: center;
+				color: #495057;
+			}
+			#video {
+				width: 100%;
+				border-radius: 5px;
+				background-color: #000;
+			}
+			.or-divider {
+				margin: 20px 0;
+				color: #6c757d;
+				font-weight: bold;
+				position: relative;
+			}
+			.or-divider::before,
+			.or-divider::after {
+				content: "";
+				position: absolute;
+				top: 50%;
+				width: 45%;
+				height: 1px;
+				background-color: #dee2e6;
+			}
+			.or-divider::before {
+				left: 0;
+			}
+			.or-divider::after {
+				right: 0;
+			}
+			.selected-file {
+				margin-top: 10px;
+				color: #495057;
+				font-size: 14px;
+			}
+			.error-message {
+				color: #dc3545;
+				margin-top: 10px;
+				display: none;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1 style="text-align: center; color: #2c3e50">
+				Video Processor & Player
+			</h1>
+			<div class="upload-container">
+				<form id="uploadForm">
+					<div class="input-group">
+						<label class="custom-file-upload">
+							<input
+								type="file"
+								id="videoFile"
+								accept="video/*"
+							/>
+							Choose Video File
+						</label>
+						<div class="selected-file" id="selectedFile"></div>
+					</div>
+
+					<div class="or-divider">OR</div>
+
+					<div class="input-group">
+						<input
+							type="text"
+							id="videoUrl"
+							class="url-input"
+							placeholder="Enter video URL (e.g., https://example.com/video.mp4)"
+						/>
+					</div>
+
+					<button type="submit" class="process-btn" id="processBtn">
+						Process Video
+					</button>
+					<div class="error-message" id="errorMessage"></div>
+				</form>
+
+				<div class="progress" id="progress">
+					<div>Processing video... Please wait.</div>
+					<div style="margin-top: 10px">
+						This may take several minutes depending on the video
+						size.
+					</div>
+				</div>
+			</div>
+
+			<div class="player-container" id="playerContainer">
+				<div class="quality-selector">
+					Quality:
+					<select id="qualitySelect">
+						<option value="auto">Auto</option>
+						<option value="1080">1080p</option>
+						<option value="720">720p</option>
+						<option value="480">480p</option>
+					</select>
+				</div>
+				<video id="video" controls></video>
+			</div>
+		</div>
+
+		<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+		<script>
+			const uploadForm = document.getElementById("uploadForm");
+			const progress = document.getElementById("progress");
+			const playerContainer = document.getElementById("playerContainer");
+			const video = document.getElementById("video");
+			const qualitySelect = document.getElementById("qualitySelect");
+			const videoFileInput = document.getElementById("videoFile");
+			const videoUrlInput = document.getElementById("videoUrl");
+			const selectedFileDiv = document.getElementById("selectedFile");
+			const processBtn = document.getElementById("processBtn");
+			const errorMessage = document.getElementById("errorMessage");
+			let hls;
+
+			videoFileInput.addEventListener("change", function (e) {
+				if (this.files[0]) {
+					selectedFileDiv.textContent = `Selected: ${this.files[0].name}`;
+					videoUrlInput.value = ""; // Clear URL input when file is selected
+				} else {
+					selectedFileDiv.textContent = "";
+				}
+			});
+
+			videoUrlInput.addEventListener("input", function (e) {
+				if (this.value) {
+					videoFileInput.value = ""; // Clear file input when URL is entered
+					selectedFileDiv.textContent = "";
+				}
+			});
+
+			uploadForm.addEventListener("submit", async (e) => {
+				e.preventDefault();
+				errorMessage.style.display = "none";
+
+				const formData = new FormData();
+				const videoFile = videoFileInput.files[0];
+				const videoUrl = videoUrlInput.value.trim();
+
+				if (!videoFile && !videoUrl) {
+					errorMessage.textContent =
+						"Please provide either a video file or URL";
+					errorMessage.style.display = "block";
+					return;
+				}
+
+				if (videoFile) {
+					formData.append("video", videoFile);
+				}
+
+				progress.style.display = "block";
+				processBtn.disabled = true;
+
+				try {
+					const response = await fetch("/process-video", {
+						method: "POST",
+						body: videoFile
+							? formData
+							: JSON.stringify({ videoUrl }),
+						headers: videoFile
+							? {}
+							: {
+									"Content-Type": "application/json",
+							  },
+					});
+
+					const data = await response.json();
+
+					if (data.success) {
+						initPlayer(data.playlistUrl);
+						playerContainer.style.display = "block";
+					} else {
+						throw new Error(
+							data.error || "Failed to process video"
+						);
+					}
+				} catch (error) {
+					console.error("Error:", error);
+					errorMessage.textContent =
+						error.message || "Error processing video";
+					errorMessage.style.display = "block";
+				} finally {
+					progress.style.display = "none";
+					processBtn.disabled = false;
+					uploadForm.reset();
+					selectedFileDiv.textContent = "";
+				}
+			});
+
+			function initPlayer(playlistUrl) {
+				if (hls) {
+					hls.destroy();
+				}
+
+				if (Hls.isSupported()) {
+					hls = new Hls({
+						maxMaxBufferLength: 30,
+						debug: false,
+					});
+
+					hls.loadSource(playlistUrl);
+					hls.attachMedia(video);
+
+					hls.on(Hls.Events.MANIFEST_PARSED, () => {
+						const levels = hls.levels;
+
+						// Update quality selector
+						qualitySelect.innerHTML =
+							'<option value="auto">Auto</option>';
+						levels.forEach((level, index) => {
+							const height = level.height;
+							qualitySelect.innerHTML += `
+                            <option value="${index}">${height}p</option>
+                        `;
+						});
+
+						video
+							.play()
+							.catch((e) =>
+								console.log("Auto-play prevented:", e)
+							);
+					});
+
+					qualitySelect.addEventListener("change", (event) => {
+						const quality = event.target.value;
+						if (quality === "auto") {
+							hls.currentLevel = -1; // Auto quality
+						} else {
+							hls.currentLevel = parseInt(quality);
+						}
+					});
+				} else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+					// For Safari
+					video.src = playlistUrl;
+					video.addEventListener("loadedmetadata", () => {
+						video
+							.play()
+							.catch((e) =>
+								console.log("Auto-play prevented:", e)
+							);
+					});
+				}
+			}
+		</script>
+	</body>
+</html>
