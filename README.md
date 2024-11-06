@@ -29,8 +29,8 @@ Before running this application, make sure you have the following installed:
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
-cd video-processor-hls-player
+git clone https://github.com/rajat343/ffmpeg_hls_video_player.git
+cd ffmpeg_hls_video_player
 ```
 
 2. Install dependencies:
